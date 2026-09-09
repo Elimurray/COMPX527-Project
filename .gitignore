@@ -1,0 +1,62 @@
+# ---- Claude Code / editor local state ----
+.claude/
+.cursor/
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# ---- Secrets & credentials (NEVER commit) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+.aws/
+aws-credentials*
+credentials
+secrets.json
+*.secret.*
+
+# ---- Node / TypeScript ----
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+*.js.map
+.eslintcache
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Frontend build output ----
+.next/
+.vite/
+.parcel-cache/
+
+# ---- AWS CDK ----
+cdk.out/
+cdk.context.json
+!cdk.json
+
+# ---- Lambda build artefacts ----
+*.zip
+lambda-package/
+
+# ---- Data (NOAA/FEMA dumps live in S3, not in git) ----
+data/raw/
+data/processed/
+*.csv.gz
+*.parquet
+
+# ---- OS noise ----
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ---- Claude Code project instructions (local only) ----
+CLAUDE.md
