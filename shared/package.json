@@ -1,0 +1,12 @@
+{
+  "name": "@derf/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Types and constants shared between the API, the ingestion jobs, and the web client",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit"
+  }
+}

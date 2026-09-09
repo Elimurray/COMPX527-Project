@@ -1,0 +1,17 @@
+{
+  "name": "@derf/services",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lambda handlers — API, report processing, and NOAA/FEMA ingestion",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@derf/shared": "*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145"
+  }
+}

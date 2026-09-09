@@ -4,7 +4,7 @@ Living checklist for the COMPX527 group project. Tick items as they land, and up
 **Status** at the top of each milestone. Architecture and scope live in [CLAUDE.md](CLAUDE.md);
 this file only tracks *what is done and what is next*.
 
-**Last updated:** 2026-09-09 · **Current milestone:** M0 — Foundations
+**Last updated:** 2026-09-09 · **Current milestone:** M0 closing out → M1 next
 
 ---
 
@@ -50,15 +50,17 @@ Legend: ⬜ not started · 🟡 in progress · ✅ done · 🔴 blocked
 
 Nothing else can start cleanly until the repo shape and toolchain are agreed.
 
-- [x] `CLAUDE.md` written and moved to repo root (shared with the whole team)
+- [x] `CLAUDE.md` written (kept local — gitignored, not shared with the team)
 - [x] `.gitignore` covering secrets, `node_modules/`, `cdk.out/`, and local editor state
 - [x] Language decision: TypeScript everywhere
 - [x] IaC decision: AWS CDK
 - [ ] Initial commit + push to GitHub, `main` as default branch
 - [ ] Branch protection on `main` (require PR + 1 review) — cheap insurance for a 4-person team
-- [ ] Monorepo skeleton created: `infra/` `services/` `web/` `shared/`
-- [ ] Root `package.json` with npm workspaces, shared `tsconfig.base.json`, ESLint + Prettier
-- [ ] `.env.example` documenting every env var (never a real `.env`)
+- [x] Monorepo skeleton created: `infra/` `services/` `web/` `shared/`
+- [x] Root `package.json` with npm workspaces, shared `tsconfig.base.json`, ESLint + Prettier
+- [x] `.env.example` documenting every env var (never a real `.env`)
+- [x] `README.md` with setup, everyday commands, AWS/CDK usage, and cost discipline
+- [x] `npm run verify` (format + lint + build) passes clean on a fresh install
 - [ ] All four members can clone, `npm install`, and run `npm run build` locally
 
 **Exit criteria:** every member has the repo building locally and the toolchain is not up for debate again.
@@ -129,7 +131,7 @@ Prove the path end to end with trivial logic *before* building real features on 
 - [ ] API Gateway with a Cognito authorizer
 - [ ] One `GET /health` Lambda (no auth) and one `GET /me` Lambda (auth required)
 - [ ] Confirmed: unauthenticated call to `/me` returns 401; authenticated call returns the user's claims
-- [ ] Shared TypeScript types for API request/response in `shared/`
+- [x] Shared TypeScript types for API request/response in `shared/` (done early in M0)
 - [ ] `POST /reports` and `GET /reports?bbox=...` stubs returning fixture data, so Prasamsha can
       build the map against a real contract before the backend is finished
 - [ ] Structured JSON logging in every Lambda from the first commit (Alexander needs it for M7)

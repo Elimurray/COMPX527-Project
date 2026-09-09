@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "dist",
+    "rootDir": ".",
+    "composite": true,
+    "types": ["node"]
+  },
+  "include": ["bin/**/*", "lib/**/*"],
+  "exclude": ["cdk.out", "dist"],
+  "references": [{ "path": "../shared" }]
+}

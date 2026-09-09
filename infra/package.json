@@ -1,0 +1,24 @@
+{
+  "name": "@derf/infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK app — every resource in this project is defined here",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --all",
+    "destroy": "cdk destroy --all"
+  },
+  "dependencies": {
+    "@derf/shared": "*",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.150.0",
+    "ts-node": "^10.9.2"
+  }
+}
