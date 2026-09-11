@@ -4,7 +4,7 @@ Living checklist for the COMPX527 group project. Tick items as they land, and up
 **Status** at the top of each milestone. Architecture and scope live in [CLAUDE.md](CLAUDE.md);
 this file only tracks *what is done and what is next*.
 
-**Last updated:** 2026-09-11 · **Current milestone:** M2 — CDK app + core infra
+**Last updated:** 2026-09-11 · **Current milestone:** M3 — walking skeleton
 
 ---
 
@@ -34,7 +34,7 @@ this file only tracks *what is done and what is next*.
 | M0 | Foundations — repo, decisions, tooling | 1 | Eli | 🟡 In progress |
 | M1 | AWS account guardrails & IAM | 1 | Eli | ✅ Done (deviations) |
 | M2 | CDK app + core infra | 2 | Eli | 🟡 Storage + Auth live |
-| M3 | Auth → API → Lambda walking skeleton | 2–3 | Eli | ⬜ Not started |
+| M3 | Auth → API → Lambda walking skeleton | 2–3 | Eli | ✅ Deployed + verified |
 | M4 | Data ingestion pipeline (NOAA/FEMA) | 3 | Sunita | ⬜ Not started |
 | M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli + Alexander | ⬜ Not started |
 | M6 | Frontend map on CloudFront | 4–5 | Prasamsha | ⬜ Not started |
@@ -178,13 +178,36 @@ From here on, **every AWS resource is created by CDK, not by clicking**.
 
 Prove the path end to end with trivial logic *before* building real features on top of it.
 
-- [ ] API Gateway with a Cognito authorizer
-- [ ] One `GET /health` Lambda (no auth) and one `GET /me` Lambda (auth required)
-- [ ] Confirmed: unauthenticated call to `/me` returns 401; authenticated call returns the user's claims
+- [x] HTTP API with a Cognito JWT authorizer as the **API-wide default**, so routes fail
+      closed — a route added later is authenticated unless it explicitly opts out
+- [x] Four handlers written and bundling cleanly with esbuild (1.4–4.1 kB each, no Docker):
+      `health.ts`, `me.ts`, `reports-list.ts`, `reports-create.ts`
+- [x] Route auth verified in the synthesised template:
+      `GET /health` NONE · `GET /me` JWT · `GET /reports` NONE · `POST /reports` JWT
+- [x] Reading reports is public by design — during a disaster, finding a shelter must not
+      require an account. Submitting one is authenticated, so reports stay attributable.
 - [x] Shared TypeScript types for API request/response in `shared/` (done early in M0)
-- [ ] `POST /reports` and `GET /reports?bbox=...` stubs returning fixture data, so Prasamsha can
-      build the map against a real contract before the backend is finished
-- [ ] Structured JSON logging in every Lambda from the first commit (Alexander needs it for M7)
+- [x] `POST /reports` validates input and returns 202; `GET /reports?bbox=...` returns
+      fixture data, so the frontend has a real contract before the backend exists
+- [x] Structured JSON logging in every handler, plus a shared `ok()`/`fail()` response
+      helper so every error carries a `requestId` traceable to CloudWatch
+- [x] Least privilege confirmed in the template: each Lambda role holds **only**
+      `AWSLambdaBasicExecutionRole`, zero inline policies, and no `dynamodb:` or `s3:`
+      actions anywhere — grants come in M4/M5 when the code actually reads or writes
+- [x] Explicit log groups at 14-day retention (the `logRetention` prop was avoided: it
+      provisions a custom-resource Lambda and IAM role to do the same job)
+- [x] ARM64/Graviton, 256 MB, 10s timeout, source maps enabled for real stack traces
+- [x] **`Derf-dev-Api` deployed 2026-09-11** — `https://a32044zzhl.execute-api.us-east-1.amazonaws.com`
+- [x] **Verified against the live API** (no credentials used — these are public endpoints):
+  - [x] `GET /health` → 200 `{"status":"ok","stage":"dev"}`
+  - [x] `GET /me` → **401** unauthenticated
+  - [x] `GET /reports?bbox=174,-37,175,-36` → 200, two fixture reports centred on the bbox
+  - [x] `POST /reports` with no token and an invalid `{}` body → **401, not 400**. The
+        authorizer runs before handler code, so unauthenticated requests never reach
+        application logic. This is the milestone's real proof.
+  - [x] `GET /reports?bbox=nonsense` → 400 with a structured error carrying
+        `requestId`, traceable to the matching CloudWatch log line
+- [ ] Authenticated `/me` → 200 with claims (needs a test Cognito user + token)
 
 **Exit criteria:** the auth boundary is proven, and the frontend has a stable API contract to code against.
 
