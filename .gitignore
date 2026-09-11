@@ -60,3 +60,7 @@ desktop.ini
 
 # ---- Claude Code project instructions (local only) ----
 CLAUDE.md
+
+# ---- Local CLI test payloads (SQS/DynamoDB scratch files) ----
+msg.json
+*.msg.json

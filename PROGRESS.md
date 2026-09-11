@@ -4,7 +4,7 @@ Living checklist for the COMPX527 group project. Tick items as they land, and up
 **Status** at the top of each milestone. Architecture and scope live in [CLAUDE.md](CLAUDE.md);
 this file only tracks *what is done and what is next*.
 
-**Last updated:** 2026-09-11 · **Current milestone:** M3 — walking skeleton
+**Last updated:** 2026-09-11 · **Current milestone:** M5 — report pipeline
 
 ---
 
@@ -21,8 +21,8 @@ this file only tracks *what is done and what is next*.
 | Decision | Needed by | Owner | Notes |
 |---|---|---|---|
 | DynamoDB key schema for reports | M2 | Sunita + Eli | Likely PK = geohash prefix, SK = ISO timestamp. Drives every query later — do not defer past M2. |
-| How "nearby" is computed | M2 | Eli | Geohash bucketing (query neighbouring cells) vs radius filter in Lambda. Geohash is the cheaper read pattern. |
-| SNS fan-out targeting | M4 | Alexander | Topic-per-region vs one topic with subscription filter policies. |
+| ~~How "nearby" is computed~~ | — | Eli | **Settled M5:** geohash cells covering the requested bbox, one bounded Query each. |
+| ~~SNS fan-out targeting~~ | — | Eli | **Settled M5:** one topic, subscription filter policies on the `geohash` message attribute. |
 | CI/CD host | M6 | Alexander | GitHub Actions vs CodePipeline. Actions is likely simpler given the repo is on GitHub. |
 
 ---
@@ -36,7 +36,7 @@ this file only tracks *what is done and what is next*.
 | M2 | CDK app + core infra | 2 | Eli | 🟡 Storage + Auth live |
 | M3 | Auth → API → Lambda walking skeleton | 2–3 | Eli | ✅ Deployed + verified |
 | M4 | Data ingestion pipeline (NOAA/FEMA) | 3 | Sunita | ⬜ Not started |
-| M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli + Alexander | ⬜ Not started |
+| M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli | 🟡 Written, not deployed |
 | M6 | Frontend map on CloudFront | 4–5 | Prasamsha | ⬜ Not started |
 | M7 | Security hardening & load testing | 6–7 | Alexander | ⬜ Not started |
 | M8 | Deployment automation, demo, report | 8 + final | All | ⬜ Not started |
@@ -230,16 +230,53 @@ Prove the path end to end with trivial logic *before* building real features on 
 ---
 
 ## M5 — Reporting & alerting pipeline
-**Owner:** Eli (pipeline) + Alexander (SQS/SNS) · **Target:** Weeks 4–5 · **Status:** ⬜
+**Owner:** Eli · **Target:** Weeks 4–5 · **Status:** 🟡 Written and synthesising, **not yet deployed**
 
-- [ ] SQS queue in front of report processing, **with a dead-letter queue** (a DLQ is not optional —
-      without it, failed reports vanish silently during exactly the surge you built this for)
-- [ ] `POST /reports` validates input, writes to SQS, returns 202 fast
-- [ ] Processing Lambda consumes SQS → writes to DynamoDB, idempotent on report ID
-- [ ] Geo bucketing applied on write so "nearby" reads are cheap
-- [ ] SNS topic(s) for notifications; subscription/filter model implemented
-- [ ] Conditional publish rules defined (e.g. shelter at capacity, new supply point)
-- [ ] Report image upload via pre-signed S3 URLs (never proxy file bytes through Lambda)
+- [x] SQS queue with a **dead-letter queue** — `derf-dev-reports` (visibility 180s = 6x the
+      30s processing timeout, 4-day retention) redriving to `derf-dev-reports-dlq` after
+      3 attempts, 14-day retention. Both queues `enforceSSL`.
+- [x] `POST /reports` validates input, enqueues, and returns 202. The id is minted before
+      the queue so the downstream write can be made idempotent.
+- [x] Processing Lambda consumes the queue and writes to DynamoDB, **idempotent** via
+      `ConditionExpression: attribute_not_exists(...)` — SQS is at-least-once, so duplicate
+      delivery is normal and must not double-write.
+- [x] **Partial batch failure reporting** (`ReportBatchItemFailures`). Without it, one bad
+      message fails the whole batch of ten and drags nine already-written reports to the DLQ.
+- [x] Geohash bucketing on write; `GET /reports` now runs one bounded Query per covering
+      cell. **No Scan anywhere in the read path.**
+- [x] `shared/src/geo.ts` — geohash encoder verified against the canonical reference value
+      (`57.64911,10.40744` → `u4pruydqqvj`); bbox coverage capped at 64 cells so a
+      zoomed-out viewport cannot fan out unboundedly
+- [x] SNS: **one topic + subscription filter policies** (settles the open decision). The
+      processor publishes `geohash`, `resourceType` and `status` as *message attributes*,
+      because filter policies can only match attributes — that is what lets a subscriber get
+      alerts for their own area instead of every report nationwide.
+- [x] Notification is deliberately narrow: status `unavailable`, or capacity ≥ 90%. An alert
+      that fires for every report trains people to ignore alerts.
+- [x] **CloudWatch alarm on DLQ depth > 0**, wired to a separate ops topic. Threshold is
+      zero, not a tolerance band — any dead-lettered message is a report a user submitted
+      and the system lost.
+- [x] IAM narrowed to match the code exactly, verified in the template:
+      processor = `dynamodb:PutItem` + `sns:Publish`; reader = `dynamodb:Query`;
+      submitter = `sqs:SendMessage`. Notably **nothing in the system may update or delete a
+      stored report** — `grantWriteData` would have permitted that, so an explicit
+      single-action grant was used instead.
+- [x] **`Derf-dev-Pipeline` deployed 2026-09-11** — 14/14 resources, no rollback.
+      Queue `https://sqs.us-east-1.amazonaws.com/339254022271/derf-dev-reports`,
+      DLQ `derf-dev-reports-dlq`, topics `derf-dev-alerts` and `derf-dev-ops-alerts`.
+- [x] Caught before deploying: dropping `IMAGES_BUCKET` from the CreateReport handler would
+      have deleted a Storage export that the live Api stack still imports, failing the
+      update mid-flight. `cdk diff` surfaced it because it shows dependency-stack changes
+      before anything is applied — worth citing in the report as an IaC-over-console win.
+- [x] **`Derf-dev-Api` deployed 2026-09-11** — two new IAM policies, exactly
+      `sqs:SendMessage` (CreateReport) and `dynamodb:Query` (ListReports)
+- [x] **Read path verified live**: `GET /reports?bbox=174.70,-36.90,174.82,-36.80` returns
+      `{"reports":[]}` — no longer fixture data, so the geohash→Query path really runs.
+      An empty array rather than a 500 also confirms the `dynamodb:Query` grant is correct.
+- [x] Auth still holds after the rewrite: `/me` 401, `POST /reports` 401 with a **valid** body
+- [ ] Subscribe an email to the ops topic so the DLQ alarm reaches someone
+- [ ] End-to-end test: authenticated POST → 202 → row in DynamoDB → alert published
+- [ ] Report image upload via pre-signed S3 URLs (still to do)
 
 **Exit criteria:** a report submitted through the API appears on the map and triggers the right alert.
 

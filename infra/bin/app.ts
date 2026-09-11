@@ -31,6 +31,12 @@ const auth = new AuthStack(app, `Derf-${config.stage}-Auth`, {
   description: 'Cognito user pool and app client',
 });
 
+const pipeline = new PipelineStack(app, `Derf-${config.stage}-Pipeline`, {
+  ...stackProps,
+  description: 'SQS-backed report processing and SNS notifications',
+  reportsTable: storage.reportsTable,
+});
+
 const api = new ApiStack(app, `Derf-${config.stage}-Api`, {
   ...stackProps,
   description: 'API Gateway and request-handling Lambdas',
@@ -38,17 +44,14 @@ const api = new ApiStack(app, `Derf-${config.stage}-Api`, {
   userPoolClient: auth.userPoolClient,
   reportsTable: storage.reportsTable,
   reportImagesBucket: storage.reportImagesBucket,
-});
-
-const pipeline = new PipelineStack(app, `Derf-${config.stage}-Pipeline`, {
-  ...stackProps,
-  description: 'SQS-backed report processing and SNS notifications',
-  reportsTable: storage.reportsTable,
+  reportsQueue: pipeline.reportsQueue,
 });
 
 // Passing constructs above already implies most of these, but stating them
 // keeps deploy order correct as the shells get filled in.
-api.addStackDependency(auth);
+// Storage -> Pipeline -> Api. No cycle: the pipeline never calls the API.
 pipeline.addStackDependency(storage);
+api.addStackDependency(auth);
+api.addStackDependency(pipeline);
 
 app.synth();

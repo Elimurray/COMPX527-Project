@@ -12,3 +12,18 @@ export const GEOHASH_PRECISION = 5;
 
 /** How long a report is treated as current before the UI marks it stale. */
 export const REPORT_FRESHNESS_MINUTES = 120;
+
+/**
+ * How long a report row survives before DynamoDB's TTL removes it.
+ *
+ * Longer than REPORT_FRESHNESS_MINUTES on purpose: a stale report still carries
+ * useful history for a while after the UI stops treating it as current. Expiry
+ * keeps storage bounded without a cleanup job.
+ */
+export const REPORT_TTL_DAYS = 7;
+
+/**
+ * A report at or above this fraction of capacity triggers a notification —
+ * "the shelter you are heading to is nearly full" is worth interrupting someone for.
+ */
+export const CAPACITY_ALERT_THRESHOLD = 0.9;

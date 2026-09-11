@@ -14,6 +14,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
+import type * as sqs from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 import * as path from 'node:path';
 import type { DerfStackProps } from './config';
@@ -23,6 +24,8 @@ export interface ApiStackProps extends DerfStackProps {
   readonly userPoolClient: cognito.IUserPoolClient;
   readonly reportsTable: dynamodb.ITable;
   readonly reportImagesBucket: s3.IBucket;
+  /** Submissions are handed off here rather than written synchronously. */
+  readonly reportsQueue: sqs.IQueue;
 }
 
 /** Where the handler sources live, relative to this file. */
@@ -117,14 +120,24 @@ export class ApiStack extends Stack {
       REPORTS_TABLE: props.reportsTable.tableName,
     });
     const createReportFn = createHandler('CreateReport', 'reports-create.ts', {
-      REPORTS_TABLE: props.reportsTable.tableName,
+      REPORTS_QUEUE_URL: props.reportsQueue.queueUrl,
+      // Still referenced deliberately: pre-signed image uploads are an open M5
+      // item and belong on this handler. Dropping it would also delete the
+      // Storage stack's export for this bucket, which CloudFormation refuses to
+      // do while the API stack still imports it.
       IMAGES_BUCKET: props.reportImagesBucket.bucketName,
     });
 
-    // No IAM grants yet, deliberately. These handlers return fixture data and do
-    // not touch the table or bucket. Permissions get granted in M4/M5 at the
-    // point the code actually reads or writes — granting ahead of use is how
-    // least privilege quietly stops being true.
+    // Grants are made only where the code actually reads or writes.
+    //
+    // `grantReadData` would also permit dynamodb:Scan, which this handler never
+    // does — and a Scan against the reports table is precisely the expensive
+    // mistake the geohash key schema exists to prevent. Granting the single
+    // action the code uses means the policy cannot drift from the behaviour.
+    props.reportsTable.grant(listReportsFn, 'dynamodb:Query');
+
+    // The submission handler never touches the table at all; it can only enqueue.
+    props.reportsQueue.grantSendMessages(createReportFn);
 
     this.httpApi.addRoutes({
       path: '/health',

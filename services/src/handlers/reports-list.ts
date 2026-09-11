@@ -1,7 +1,20 @@
+import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import type { BoundingBox, ListReportsResponse, Report } from '@derf/shared';
+import {
+  cellsForBoundingBox,
+  type BoundingBox,
+  type ListReportsResponse,
+  type Report,
+  type ReportItem,
+} from '@derf/shared';
+import { ddb, requireEnv } from '../lib/clients';
 import { logger } from '../lib/logger';
 import { fail, ok } from '../lib/response';
+
+const TABLE = requireEnv('REPORTS_TABLE');
+
+/** Most recent rows to read per geohash cell. */
+const PER_CELL_LIMIT = 50;
 
 /**
  * Parses `?bbox=minLon,minLat,maxLon,maxLat`.
@@ -25,43 +38,27 @@ function parseBoundingBox(raw: string | undefined): BoundingBox | null {
   return { minLon, minLat, maxLon, maxLat };
 }
 
-/**
- * Fixture data, so the frontend can build against a real response shape before
- * the DynamoDB query exists.
- *
- * TODO(M5): replace with a geohash-bucketed Query over the reports table.
- */
-function fixtureReports(bbox: BoundingBox): Report[] {
-  const centreLat = (bbox.minLat + bbox.maxLat) / 2;
-  const centreLon = (bbox.minLon + bbox.maxLon) / 2;
-  const now = new Date().toISOString();
-
-  return [
-    {
-      reportId: '00000000-0000-4000-8000-000000000001',
-      resourceType: 'shelter',
-      status: 'limited',
-      location: { lat: centreLat, lon: centreLon },
-      geohash: 'fixture',
-      note: 'Fixture data — replaced by a real query in M5.',
-      capacity: { current: 84, maximum: 100 },
-      reportedBy: 'fixture-user',
-      reportedAt: now,
-    },
-    {
-      reportId: '00000000-0000-4000-8000-000000000002',
-      resourceType: 'water',
-      status: 'available',
-      location: { lat: centreLat + 0.01, lon: centreLon + 0.01 },
-      geohash: 'fixture',
-      note: 'Fixture data — replaced by a real query in M5.',
-      reportedBy: 'fixture-user',
-      reportedAt: now,
-    },
-  ];
+/** Strips the storage-only key attributes before the report leaves the API. */
+function toReport(item: ReportItem): Report {
+  const { reportedAtId: _sk, expiresAt: _ttl, ...report } = item;
+  return report;
 }
 
-/** GET /reports?bbox=... — public: reading resource status must not require login. */
+function within(bbox: BoundingBox, report: Report): boolean {
+  const { lat, lon } = report.location;
+  return (
+    lat >= bbox.minLat && lat <= bbox.maxLat && lon >= bbox.minLon && lon <= bbox.maxLon
+  );
+}
+
+/**
+ * GET /reports?bbox=... — public: reading resource status must not require login.
+ *
+ * The viewport is converted to the geohash cells it covers, and each cell is a
+ * bounded Query on the partition key. There is no Scan anywhere in this path,
+ * so cost and latency track the size of the viewport rather than the size of
+ * the table.
+ */
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const requestId = event.requestContext.requestId;
   const bbox = parseBoundingBox(event.queryStringParameters?.bbox);
@@ -76,8 +73,38 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     );
   }
 
-  logger.info('list reports', { requestId, bbox });
+  const { cells, truncated } = cellsForBoundingBox(bbox);
 
-  const body: ListReportsResponse = { reports: fixtureReports(bbox) };
+  const responses = await Promise.all(
+    cells.map((cell) =>
+      ddb.send(
+        new QueryCommand({
+          TableName: TABLE,
+          KeyConditionExpression: 'geohash = :cell',
+          ExpressionAttributeValues: { ':cell': cell },
+          // Newest first: the sort key starts with an ISO timestamp.
+          ScanIndexForward: false,
+          Limit: PER_CELL_LIMIT,
+        }),
+      ),
+    ),
+  );
+
+  // A geohash cell is a rectangle that overhangs the requested viewport, so rows
+  // near the edge can fall outside it. Filter to the actual box before replying.
+  const reports = responses
+    .flatMap((response) => (response.Items ?? []) as ReportItem[])
+    .map(toReport)
+    .filter((report) => within(bbox, report))
+    .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt));
+
+  logger.info('list reports', {
+    requestId,
+    cells: cells.length,
+    returned: reports.length,
+    truncated,
+  });
+
+  const body: ListReportsResponse = { reports };
   return ok(body);
 };
