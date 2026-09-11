@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // Read .env from the repo root rather than web/, so the whole monorepo shares
+  // one env file — the same one `.env.example` documents. Without this, Vite
+  // looks only in web/ and silently sees none of the VITE_* values.
+  envDir: fileURLToPath(new URL('..', import.meta.url)),
   resolve: {
     alias: {
       // Resolve the shared package to its TypeScript source rather than its

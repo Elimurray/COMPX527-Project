@@ -95,8 +95,9 @@ aws configure --profile derf-dev
 aws sts get-caller-identity --profile derf-dev   # confirms who you are
 ```
 
-Set `AWS_PROFILE=derf-dev` in your `.env`. Project region is **ap-southeast-2**
-(Sydney) — lowest latency from NZ, and the default everything assumes.
+Set `AWS_PROFILE=derf-dev` in your `.env`. Project region is **us-east-1**, account
+**339254022271**. Both are pinned in `infra/lib/config.ts`, and deploying as a different
+account fails at synth rather than creating resources somewhere unexpected.
 
 ### Deploying infrastructure
 
@@ -119,13 +120,33 @@ npm run destroy               # tears everything down
 `synth` and `diff` are free and safe. Get in the habit of reading `diff` before every
 deploy; it is the cheapest way to catch an accidental table replacement.
 
+### Tearing down
+
+**Empty the buckets before you destroy.** S3 refuses to delete a non-empty bucket, and
+`cdk destroy` will fail partway through if you skip this:
+
+```bash
+aws s3 rm s3://derf-dev-data-339254022271 --recursive
+aws s3 rm s3://derf-dev-images-339254022271 --recursive
+aws s3 rm s3://derf-dev-web-339254022271 --recursive
+
+npm run destroy
+```
+
+This is manual by choice. CDK's `autoDeleteObjects` would handle it, but only by adding a
+Lambda and an IAM role holding `s3:DeleteObject*` and `s3:PutBucketPolicy` across every
+bucket, which is IAM surface this project does not want. The cost of that choice is the
+three commands above — and a bucket left behind bills quietly for as long as it exists, so
+check the console afterwards rather than assuming.
+
 ## Cost discipline
 
 The team is on a fixed budget, and an idle mistake can burn it quietly.
 
 - Budget alarms are configured in M1. If one fires, say so in the group chat rather than muting it.
 - Everything is tagged `Project=derf` and `Stage=<stage>`, so spend can be attributed per stage.
-- Run `npm run destroy` on any personal experiment stack you spin up.
+- Run `npm run destroy` on any personal experiment stack you spin up — after emptying its
+  buckets (see "Tearing down" above).
 - After the final demo, tear down billable resources.
 
 ## Contributing

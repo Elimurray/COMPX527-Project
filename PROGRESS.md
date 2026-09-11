@@ -4,7 +4,7 @@ Living checklist for the COMPX527 group project. Tick items as they land, and up
 **Status** at the top of each milestone. Architecture and scope live in [CLAUDE.md](CLAUDE.md);
 this file only tracks *what is done and what is next*.
 
-**Last updated:** 2026-09-09 · **Current milestone:** M0 closing out → M1 next
+**Last updated:** 2026-09-11 · **Current milestone:** M2 — CDK app + core infra
 
 ---
 
@@ -32,8 +32,8 @@ this file only tracks *what is done and what is next*.
 | # | Milestone | Target week | Owner | Status |
 |---|---|---|---|---|
 | M0 | Foundations — repo, decisions, tooling | 1 | Eli | 🟡 In progress |
-| M1 | AWS account guardrails & IAM | 1 | Eli + Alexander | ⬜ Not started |
-| M2 | CDK bootstrap + core infra deployed | 2 | Eli | ⬜ Not started |
+| M1 | AWS account guardrails & IAM | 1 | Eli | ✅ Done (deviations) |
+| M2 | CDK app + core infra | 2 | Eli | 🟡 Storage + Auth live |
 | M3 | Auth → API → Lambda walking skeleton | 2–3 | Eli | ⬜ Not started |
 | M4 | Data ingestion pipeline (NOAA/FEMA) | 3 | Sunita | ⬜ Not started |
 | M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli + Alexander | ⬜ Not started |
@@ -68,56 +68,106 @@ Nothing else can start cleanly until the repo shape and toolchain are agreed.
 ---
 
 ## M1 — AWS account guardrails & IAM
-**Owner:** Eli (IAM) + Alexander (billing/monitoring) · **Target:** Week 1 · **Status:** ⬜
+**Owner:** Eli · **Completed:** 2026-09-11 · **Status:** ✅ Done (with deviations)
 
-Do this **before** any resource exists. It is the one part that must be done by hand in the
-console, because it is what lets everything afterwards be done in code.
+Full record, including what was skipped and why:
+**[docs/m1-aws-setup.md](docs/m1-aws-setup.md)**.
 
-### Billing tripwires (do first — protects the whole project)
-- [ ] Confirm which account the team is using (student credits vs personal card) and record it here
-- [ ] Enable billing alerts in the account's billing preferences
-- [ ] AWS Budgets: monthly budget with alerts at 50% / 80% / 100% → team email
-- [ ] CloudWatch billing alarm at a fixed USD threshold as a second, independent tripwire
-- [ ] Record the agreed budget ceiling and the "pause optional services" trigger point
+**Account `339254022271`**, region **us-east-1**, ceiling **NZ$60/month** (US$30 budget).
 
-### Root account
-- [ ] MFA on the root user; root credentials stored securely and not used day to day
-- [ ] No access keys on the root user (delete any that exist)
+- [x] Org reality check — `sts get-caller-identity` works, account ID recorded, no SCP blocks
+- [x] Region settled: **us-east-1** (mandated by a separate individual assignment, carried
+      over). Pinned in `infra/lib/config.ts`; a mismatched account now fails at synth.
+- [x] AWS Budgets live: US$30/month, 40 / 60 / 80% actual + 100% forecasted
+- [x] Cost Anomaly Detection live: US$5 threshold
+- [x] CloudWatch billing alarm confirmed **unavailable** (`AWS/Billing` empty — member
+      account, as predicted). Budgets + Anomaly Detection are the two tripwires. Worth a
+      paragraph in the report.
+- [x] Root hardened: MFA on, access keys removed, password in the team manager
+- [x] CLI configured against the IAM user, with `get-session-token` for MFA'd sessions
+- [x] Service roles left to CDK, as planned — none hand-made
+- [x] `cdk bootstrap aws://339254022271/us-east-1` succeeded
+- [~] **Deviation:** the four-group / `derf-baseline` / per-area policy structure was
+      skipped. Work narrowed to solo, so the account runs on a single IAM user with
+      `AdministratorAccess` attached directly (MFA enabled). Consequence for M7 is recorded
+      in the runbook — short version: the least-privilege story now rests entirely on
+      CDK-generated service roles, which is the stronger half anyway, and the group
+      policies remain available to add later if the review needs human-IAM evidence.
 
-### Team IAM
-- [ ] One IAM user per member — no shared logins
-- [ ] MFA enforced on every IAM user
-- [ ] IAM groups with least-privilege policies scoped per area:
-  - [ ] `dev-backend` (Eli) — Lambda, API Gateway, IAM read
-  - [ ] `dev-frontend` (Prasamsha) — CloudFront, frontend S3 bucket
-  - [ ] `dev-data` (Sunita) — data S3 buckets, DynamoDB
-  - [ ] `dev-ops` (Alexander) — CloudWatch, SQS, SNS, CI/CD tooling
-- [ ] Separate **service** roles (Lambda execution) — never reuse a human's role
-- [ ] Deployment role for CDK/CI, assumable by the pipeline only
-- [ ] Region chosen and written down (recommend `ap-southeast-2`, Sydney — lowest latency from NZ)
-- [ ] Everyone has AWS CLI configured with their own credentials and can run `aws sts get-caller-identity`
-
-**Exit criteria:** nobody is using root, every action is attributable to a person or a service role,
-and the budget will page someone before it becomes a problem.
+**Exit criteria met:** root unused, spend is fenced by two independent tripwires, and the
+account is bootstrapped for CDK.
 
 ---
 
-## M2 — CDK bootstrap + core infra
-**Owner:** Eli · **Target:** Week 2 · **Status:** ⬜
+## M2 — CDK app + core infra
+**Owner:** Eli · **Target:** Week 2 · **Status:** 🟡 Storage + Auth deployed and verified; Api/Pipeline still shells
 
-From here on, **every AWS resource is created by CDK, not by clicking**. Anything clicked in the
-console now becomes an undocumented dependency that breaks the Week 8 automation milestone.
+From here on, **every AWS resource is created by CDK, not by clicking**.
 
-- [ ] `cdk bootstrap` run against the account/region
-- [ ] `infra/` CDK app with per-stack separation: `StorageStack`, `AuthStack`, `ApiStack`, `PipelineStack`
-- [ ] S3 buckets, all with encryption at rest and public access blocked:
-  - [ ] static datasets / map tiles
-  - [ ] report images
-  - [ ] frontend hosting (CloudFront origin, OAC-restricted)
-- [ ] DynamoDB reports table — key schema settled (see open decisions), encryption at rest on,
-      on-demand billing (cheaper and safer than provisioned for spiky student workloads)
-- [ ] Cognito user pool + app client
-- [ ] `cdk deploy` succeeds from a clean checkout on someone else's machine
+### Done
+- [x] `cdk bootstrap` run against `339254022271` / `us-east-1`
+- [x] `infra/lib/config.ts` — account and region pinned, stage resolution, resource naming
+- [x] Four stacks wired in `infra/bin/app.ts`, all tagged for cost allocation:
+      `Derf-dev-Storage`, `Derf-dev-Auth`, `Derf-dev-Api`, `Derf-dev-Pipeline`
+- [x] `StorageStack` filled out and verified in the synthesised template:
+  - [x] Three S3 buckets — `derf-dev-data-*`, `derf-dev-images-*`, `derf-dev-web-*`
+  - [x] SSE-S3 encryption at rest on all three (KMS skipped deliberately: ~US$1/month/key
+        plus request charges is real money against this budget)
+  - [x] Public access fully blocked, and TLS enforced by bucket policy
+  - [x] Lifecycle rules: abort incomplete multipart uploads after 7 days; `raw/` prefix to
+        Infrequent Access after 30 days (bounds the NOAA/FEMA storage footprint)
+  - [x] CORS on the images bucket for pre-signed browser uploads
+  - [x] No `autoDeleteObjects` — dropped deliberately to avoid the Lambda + IAM role it
+        adds (`s3:DeleteObject*`, `s3:PutBucketPolicy` over every bucket). StorageStack
+        synthesises to **8 resources, zero IAM roles, zero Lambdas**. Teardown requires
+        emptying buckets manually first — see README, "Tearing down".
+  - [x] DynamoDB `derf-dev-reports`: PK `geohash`, SK `reportedAtId`, on-demand billing,
+        AWS-managed encryption, TTL on `expiresAt`, PITR in prod only
+- [x] `reportSortKey()` / `parseReportSortKey()` / `ReportItem` added to `@derf/shared`
+- [x] `cdk synth` clean, no warnings; `npm run verify` green
+
+### Remaining
+- [x] **`Derf-dev-Storage` deployed 2026-09-11** — 9/9 resources created, no rollback.
+      Confirmed absent from the live event log: zero `AWS::IAM::Role`, zero
+      `AWS::Lambda::Function`. Outputs: `derf-dev-data-339254022271`,
+      `derf-dev-images-339254022271`, `derf-dev-web-339254022271`, `derf-dev-reports`.
+- [x] **Live resources verified 2026-09-11** (not just the template — this is the M7 evidence):
+  - [x] `derf-dev-data-*`: `SSEAlgorithm: AES256`; all four public-access blocks `true`;
+        bucket policy is exactly one statement, `Deny s3:*` when `aws:SecureTransport=false`
+  - [x] `derf-dev-reports`: PK `geohash` / SK `reportedAtId`, `PAY_PER_REQUEST`, `ACTIVE`,
+        TTL `ENABLED` on `expiresAt`
+  - [x] Table encryption is **explicitly configured, not the AWS default** —
+        `SSEType: KMS` with a real `KMSMasterKeyArn`. An AWS-owned-key table returns no
+        `SSEDescription` at all, so this is the distinction the report should draw.
+- [ ] Record the four stack outputs in local `.env`
+- [x] **`Derf-dev-Auth` deployed and verified 2026-09-11** — pool `us-east-1_Zx0PZsBBF`,
+      client `4turmnsmh7fiu5oum9a3qe5td6`. Live checks: `UserPoolTier: LITE`,
+      `MfaConfiguration: OPTIONAL`, `SoftwareTokenMfaConfiguration.Enabled: true`, and
+      **no `SmsMfaConfiguration`** — confirming no per-message SNS spend is possible.
+      (`describe-user-pool` does not return `EnabledMfas`; `get-user-pool-mfa-config` is
+      the call that actually proves this.)
+- [x] `AuthStack` written — Cognito user pool + web client:
+  - [x] Self sign-up, email as sign-in alias, email auto-verified
+  - [x] Password policy: 12 chars, upper/lower/digits, symbols optional (length over
+        composition, per current NIST guidance)
+  - [x] MFA optional, **TOTP only — SMS deliberately disabled** so no per-message SNS spend
+  - [x] `FeaturePlan.LITE` pinned; new pools otherwise default to Essentials, which is
+        priced higher per monthly active user
+  - [x] Client: no secret, SRP-only auth flows (no plaintext-password flow even by
+        accident), `preventUserExistenceErrors` on
+  - [ ] No OAuth/hosted-UI config — callback URLs need the CloudFront domain, so that is an
+        M6 decision
+  - [ ] `WebAuthnConfiguration: SINGLE_FACTOR` appeared by Cognito default. Inert without a
+        relying-party ID, and free — note it in the M7 review rather than acting on it now.
+- [ ] Deploy the remaining stacks once they have real content (empty shells are not worth
+      deploying — they create CloudFormation stacks you then have to clean up)
+- [ ] `cdk deploy` succeeds from a clean checkout on another machine
+
+> **Sort key deviation, recorded deliberately.** The plan said SK = ISO timestamp. It is
+> implemented as `<ISO timestamp>#<reportId>`. ISO-8601 still sorts lexicographically so
+> time-range queries are unchanged, but a bare timestamp would let two reports filed in the
+> same geohash cell in the same millisecond overwrite each other — realistic during exactly
+> the surge this system exists for, and silent when it happens.
 
 **Exit criteria:** the whole environment can be destroyed and recreated from the repo alone.
 
@@ -190,7 +240,9 @@ Prove the path end to end with trivial logic *before* building real features on 
 ## M7 — Security hardening & load testing
 **Owner:** Alexander · **Target:** Weeks 6–7 · **Status:** ⬜
 
-- [ ] Full IAM review — every wildcard added during the build is tightened or justified in writing
+- [ ] Full IAM review — tighten the service-level wildcards in the M1 group policies
+      ([docs/m1-aws-setup.md](docs/m1-aws-setup.md) §4c) against actual CloudTrail usage, or
+      justify each in writing
 - [ ] Encryption at rest **verified** on every DynamoDB table and S3 bucket (checked, not assumed)
 - [ ] S3 public access block confirmed on all buckets
 - [ ] API input validation and rate limiting / throttling on API Gateway
