@@ -41,6 +41,8 @@ this file only tracks *what is done and what is next*.
 | M7 | Security hardening & load testing | 6–7 | Alexander | ⬜ Not started |
 | M8 | Deployment automation, demo, report | 8 + final | All | ⬜ Not started |
 
+| M6b | Elastic Load Balancing (required) | — | Eli | 🟡 Written, not deployed |
+
 Legend: ⬜ not started · 🟡 in progress · ✅ done · 🔴 blocked
 
 ---
@@ -334,6 +336,36 @@ Prove the path end to end with trivial logic *before* building real features on 
       viewport — real multi-resolution querying, at the cost of extra write capacity.
 
 **Exit criteria:** a non-team-member can open the URL, sign up, file a report, and see it on the map.
+
+---
+
+## M6b — Elastic Load Balancing (assignment requirement)
+**Owner:** Eli · **Status:** 🟡 Written and synthesising, **not yet deployed**
+
+The brief requires ELB, CloudWatch **and** IAM. ELB was previously cut on cost grounds;
+that was wrong against this rubric and is now corrected.
+
+- [x] `AlbStack` — its own stack so it can be destroyed independently after the demo
+- [x] VPC with **public subnets only across 2 AZs, `natGateways: 0`** — verified in the
+      template: **0 NAT Gateways, 0 Elastic IPs**. CDK's default VPC would have created a
+      NAT per AZ at ~US$32/month each.
+- [x] ALB → **Lambda target group** (`targetType: lambda`), health check on `/health`
+      every 300s (each check is a billable invocation)
+- [x] `alb-reports.ts` handler — ALB event/response shape differs from API Gateway v2, and
+      ALB does **not** URL-decode query values, so bbox is decoded explicitly
+- [x] Query logic extracted to `lib/reports-query.ts` and shared by both ingresses, so the
+      two cannot drift
+- [x] Same narrow grant as the API path: `dynamodb:Query` only
+- [ ] Deploy `Derf-dev-Alb`
+- [ ] Compare both ingresses in the report (latency, TLS, cost)
+- [ ] **Destroy after the demo** — this is the only stack that bills while idle
+
+> **HTTP only.** Terminating TLS on an ALB needs an ACM certificate, which the brief
+> prohibits. API Gateway provides HTTPS with no certificate management, so on transport
+> security the API Gateway path is strictly better — a genuine finding for the report
+> rather than an excuse.
+
+**Exit criteria:** ELB is used for real traffic, and its cost is bounded and documented.
 
 ---
 

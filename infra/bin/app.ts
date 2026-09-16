@@ -6,6 +6,7 @@ import { AuthStack } from '../lib/auth-stack';
 import { ApiStack } from '../lib/api-stack';
 import { PipelineStack } from '../lib/pipeline-stack';
 import { WebStack } from '../lib/web-stack';
+import { AlbStack } from '../lib/alb-stack';
 
 const app = new App();
 const config = resolveConfig(app);
@@ -55,6 +56,17 @@ const web = new WebStack(app, `Derf-${config.stage}-Web`, {
   description: 'CloudFront distribution and the frontend bucket it serves',
 });
 
+/**
+ * The only stack that bills while idle (~US$16-22/month for the load balancer).
+ * Separated so it can be destroyed on its own after the demo:
+ *   npx cdk destroy Derf-dev-Alb
+ */
+const alb = new AlbStack(app, `Derf-${config.stage}-Alb`, {
+  ...stackProps,
+  description: 'Application Load Balancer ingress for the public read path',
+  reportsTable: storage.reportsTable,
+});
+
 // Storage -> Pipeline -> Api. No cycle: the pipeline never calls the API.
 pipeline.addStackDependency(storage);
 api.addStackDependency(auth);
@@ -62,5 +74,6 @@ api.addStackDependency(pipeline);
 // Storage must update first: it releases the frontend bucket name that WebStack
 // then creates, so ordering prevents a name collision on this one deploy.
 web.addStackDependency(storage);
+alb.addStackDependency(storage);
 
 app.synth();
