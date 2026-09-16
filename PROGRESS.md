@@ -320,8 +320,18 @@ Prove the path end to end with trivial logic *before* building real features on 
 - [ ] `npm run deploy:web` to publish the built site
 - [ ] Verify: sign up, sign in, submit a report, watch it appear on the map
 - [ ] Tighten CORS from `*` to the CloudFront domain, on both the API and the images bucket
+- [x] **Fixed: zoomed-out viewports silently returned zero reports.** `cellsForBoundingBox`
+      caps coverage at 64 cells; a view of upper NZ needs ~7,107, so iteration stopped in
+      the corner and never reached the area holding reports. The `truncated` flag existed
+      but was only logged, never returned. It is now part of `ListReportsResponse`, and the
+      UI says "this area is too large to search completely — zoom in" instead of "no
+      reports in this area yet". Telling someone there is nothing near them when the server
+      did not look is the most harmful way this screen could be wrong.
 - [ ] Known: the JS bundle is ~356 kB gzipped, nearly all MapLibre. Acceptable for a demo;
       code-splitting the map behind `React.lazy` would cut first load if it matters.
+- [ ] Known limitation: coverage is single-resolution. Proper fix is storing coarser
+      geohash prefixes (`geohash4`, `geohash3`) with GSIs and choosing resolution by
+      viewport — real multi-resolution querying, at the cost of extra write capacity.
 
 **Exit criteria:** a non-team-member can open the URL, sign up, file a report, and see it on the map.
 

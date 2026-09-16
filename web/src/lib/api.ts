@@ -4,7 +4,6 @@ import type {
   CreateReportInput,
   CreateReportResponse,
   ListReportsResponse,
-  Report,
 } from '@derf/shared';
 import { config } from './config';
 import { accessToken } from './auth';
@@ -47,8 +46,14 @@ async function parseError(response: Response): Promise<ApiRequestError> {
   return new ApiRequestError(response.status, code, message, requestId);
 }
 
-/** Public: reading resource status never requires an account. */
-export async function listReports(bbox: BoundingBox): Promise<Report[]> {
+/**
+ * Public: reading resource status never requires an account.
+ *
+ * Returns the whole response rather than just the array, because `truncated`
+ * has to reach the UI — a partial result rendered as a complete one is worse
+ * than no result at all.
+ */
+export async function listReports(bbox: BoundingBox): Promise<ListReportsResponse> {
   const query = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
   const response = await fetch(
     `${config.apiBaseUrl}/reports?bbox=${encodeURIComponent(query)}`,
@@ -56,8 +61,7 @@ export async function listReports(bbox: BoundingBox): Promise<Report[]> {
 
   if (!response.ok) throw await parseError(response);
 
-  const body = (await response.json()) as ListReportsResponse;
-  return body.reports;
+  return (await response.json()) as ListReportsResponse;
 }
 
 /** Authenticated. Returns once the report is *accepted*, not once it is stored. */

@@ -13,6 +13,8 @@ export function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [reports, setReports] = useState<Report[]>([]);
+  /** True when the viewport is too large for the server to cover completely. */
+  const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [pickedLocation, setPicked] = useState<{ lat: number; lon: number } | null>(null);
@@ -29,7 +31,9 @@ export function App() {
   const refresh = useCallback(async () => {
     if (!bounds.current) return;
     try {
-      setReports(await listReports(bounds.current));
+      const result = await listReports(bounds.current);
+      setReports(result.reports);
+      setTruncated(result.truncated === true);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load reports');
@@ -105,12 +109,29 @@ export function App() {
         <aside className="sidebar">
           <section className="panel summary">
             <h2>In view</h2>
-            <p className="count">{reports.length}</p>
-            <p className="hint">
-              {reports.length === 0
-                ? 'No reports in this area yet. Pan or zoom to search elsewhere.'
-                : 'Select a marker for detail.'}
+            <p className="count">
+              {reports.length}
+              {truncated && <span className="partial">of more</span>}
             </p>
+
+            {/*
+              A truncated result must never read as a complete one. Telling
+              someone there is nothing near them when the server simply did not
+              look that far is the most harmful mistake this screen can make.
+            */}
+            {truncated ? (
+              <p className="warn">
+                This area is too large to search completely. Zoom in to see the reports
+                here.
+              </p>
+            ) : (
+              <p className="hint">
+                {reports.length === 0
+                  ? 'No reports in this area yet. Pan or zoom to search elsewhere.'
+                  : 'Select a marker for detail.'}
+              </p>
+            )}
+
             {error && <p className="error">{error}</p>}
           </section>
 

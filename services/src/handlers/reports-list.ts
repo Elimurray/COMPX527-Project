@@ -105,6 +105,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     truncated,
   });
 
-  const body: ListReportsResponse = { reports };
+  const body: ListReportsResponse = {
+    reports,
+    // Only present when true, so a complete result stays a clean payload.
+    ...(truncated ? { truncated: true } : {}),
+  };
   return ok(body);
 };

@@ -231,6 +231,21 @@ button.link {
   font-size: 0.82rem;
   color: var(--danger);
 }
+.warn {
+  margin: 0;
+  font-size: 0.82rem;
+  background: #fdf3e3;
+  border: 1px solid #e8cfa0;
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  color: #7a5310;
+}
+.partial {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 0.4rem;
+}
 .notice {
   margin: 0;
   font-size: 0.82rem;

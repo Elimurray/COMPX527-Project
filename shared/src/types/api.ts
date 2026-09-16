@@ -12,6 +12,15 @@ export interface ListReportsResponse {
   reports: Report[];
   /** Opaque pagination token; absent when there are no further pages. */
   nextToken?: string;
+  /**
+   * True when the requested area needed more geohash cells than the server will
+   * query, so `reports` covers only part of it.
+   *
+   * Clients must surface this. Showing a truncated result as if it were complete
+   * tells someone there are no resources near them when there may be plenty —
+   * the most dangerous way this system could be wrong.
+   */
+  truncated?: boolean;
 }
 
 /** POST /reports returns 202 — the report is queued, not yet written. */
