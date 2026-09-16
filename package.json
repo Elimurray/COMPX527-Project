@@ -2,7 +2,7 @@
   "name": "derf",
   "version": "0.1.0",
   "private": true,
-  "description": "Disaster & Emergency Resource Finder — COMPX527 group project",
+  "description": "Disaster & Emergency Resource Finder \u2014 COMPX527 group project",
   "engines": {
     "node": ">=22"
   },
@@ -21,7 +21,8 @@
     "format:check": "prettier --check .",
     "test": "npm run test --workspaces --if-present",
     "clean": "rimraf \"{shared,services,infra,web}/dist\" \"{shared,services,infra,web}/*.tsbuildinfo\" infra/cdk.out",
-    "verify": "npm run format:check && npm run lint && npm run build"
+    "verify": "npm run format:check && npm run lint && npm run build",
+    "deploy:web": "node scripts/deploy-web.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

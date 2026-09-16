@@ -4,7 +4,7 @@ Living checklist for the COMPX527 group project. Tick items as they land, and up
 **Status** at the top of each milestone. Architecture and scope live in [CLAUDE.md](CLAUDE.md);
 this file only tracks *what is done and what is next*.
 
-**Last updated:** 2026-09-11 · **Current milestone:** M5 — report pipeline
+**Last updated:** 2026-09-16 · **Current milestone:** M6 — frontend map
 
 ---
 
@@ -36,8 +36,8 @@ this file only tracks *what is done and what is next*.
 | M2 | CDK app + core infra | 2 | Eli | 🟡 Storage + Auth live |
 | M3 | Auth → API → Lambda walking skeleton | 2–3 | Eli | ✅ Deployed + verified |
 | M4 | Data ingestion pipeline (NOAA/FEMA) | 3 | Sunita | ⬜ Not started |
-| M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli | 🟡 Written, not deployed |
-| M6 | Frontend map on CloudFront | 4–5 | Prasamsha | ⬜ Not started |
+| M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli | ✅ Deployed + verified |
+| M6 | Frontend map on CloudFront | 4–5 | Eli | 🟡 Written, not deployed |
 | M7 | Security hardening & load testing | 6–7 | Alexander | ⬜ Not started |
 | M8 | Deployment automation, demo, report | 8 + final | All | ⬜ Not started |
 
@@ -230,7 +230,7 @@ Prove the path end to end with trivial logic *before* building real features on 
 ---
 
 ## M5 — Reporting & alerting pipeline
-**Owner:** Eli · **Target:** Weeks 4–5 · **Status:** 🟡 Written and synthesising, **not yet deployed**
+**Owner:** Eli · **Target:** Weeks 4–5 · **Status:** ✅ Core deployed and verified end to end (3 follow-ups open)
 
 - [x] SQS queue with a **dead-letter queue** — `derf-dev-reports` (visibility 180s = 6x the
       30s processing timeout, 4-day retention) redriving to `derf-dev-reports-dlq` after
@@ -283,15 +283,45 @@ Prove the path end to end with trivial logic *before* building real features on 
 ---
 
 ## M6 — Frontend map on CloudFront
-**Owner:** Prasamsha · **Target:** Weeks 4–5 · **Status:** ⬜
+**Owner:** Eli · **Target:** Weeks 4–5 · **Status:** 🟡 Written and synthesising, **not yet deployed**
 
-- [ ] Map UI rendering live reports from `GET /reports`
-- [ ] NOAA/FEMA layers overlaid beneath live reports
-- [ ] Cognito hosted UI (or custom form) wired for sign-up / sign-in
-- [ ] Authenticated report submission form, including image upload
-- [ ] CloudFront distribution in front of the frontend bucket, origin locked to OAC
-- [ ] HTTPS enforced; sensible cache policy (long-cache hashed assets, no-cache `index.html`)
-- [ ] Usable on a phone screen — this is a disaster tool, most users are on mobile
+- [x] `WebStack` — CloudFront + private S3 origin via **Origin Access Control**. Bucket
+      policy verified in the template: TLS-deny plus `s3:GetObject` for
+      `cloudfront.amazonaws.com` only. The bucket is never public.
+- [x] **Frontend bucket moved from StorageStack into WebStack.** OAC attaches a bucket
+      policy naming the distribution, so a bucket in one stack and a distribution in
+      another is a genuine dependency cycle — CDK refused to synth. Bucket and
+      distribution must share a stack.
+- [x] SPA fallbacks: 403/404 → `/index.html` with status 200, so client routing works
+- [x] `PRICE_CLASS_ALL` (includes Oceania — the actual audience); HTTP/2 + HTTP/3
+- [x] No `BucketDeployment` construct — it would provision a custom-resource Lambda and
+      IAM role. `npm run deploy:web` uses `aws s3 sync` instead, which is also what the
+      M8 pipeline will run, so the deploy path is identical by hand and in CI.
+- [x] Deploy script reads bucket and distribution id from stack outputs (nothing
+      hardcoded), uploads hashed assets with a one-year immutable cache, uploads
+      `index.html` with `no-cache`, then invalidates only `/index.html`
+- [x] Map UI on **MapLibre GL + OpenStreetMap raster tiles** — no API key or account,
+      unlike Mapbox. OSM's usage policy suits a coursework demo but would need a hosted
+      tile provider for real deployment.
+- [x] Markers coloured by status; popups escape user-submitted text before injecting it
+- [x] Viewport drives the query — `moveend`, not `move`, so panning issues one request
+      when it stops rather than one per frame
+- [x] Cognito sign-up → email code → confirm → sign-in, all **SRP** via
+      `amazon-cognito-identity-js`. No plaintext-password flow is enabled anywhere.
+- [x] Authenticated report form: type, status, capacity (shelters), note, pick-on-map
+- [x] Submission UX matches the 202 contract — tells the user the report is *accepted*,
+      then refreshes after the pipeline has had a moment, rather than pretending the
+      write is synchronous
+- [x] Sends the **access** token, not the id token — the API Gateway JWT authorizer
+      validates the access token, and sending the wrong one is the usual cause of a
+      mystery 401
+- [x] Mobile layout at ≤760px: most users of a disaster tool are on a phone
+- [ ] **Deploy** `Derf-dev-Storage` (releases the old bucket) then `Derf-dev-Web`
+- [ ] `npm run deploy:web` to publish the built site
+- [ ] Verify: sign up, sign in, submit a report, watch it appear on the map
+- [ ] Tighten CORS from `*` to the CloudFront domain, on both the API and the images bucket
+- [ ] Known: the JS bundle is ~356 kB gzipped, nearly all MapLibre. Acceptable for a demo;
+      code-splitting the map behind `React.lazy` would cut first load if it matters.
 
 **Exit criteria:** a non-team-member can open the URL, sign up, file a report, and see it on the map.
 

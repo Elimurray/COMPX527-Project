@@ -15,6 +15,19 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Plain-JS build scripts run in Node. TypeScript files do not need this —
+    // typescript-eslint disables no-undef for them, since tsc already checks it.
+    files: ['scripts/**/*.mjs', '**/*.config.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        __dirname: 'readonly',
+      },
+    },
+  },
+  {
     rules: {
       // Unused args are fine when prefixed with _ (common in Lambda handlers).
       '@typescript-eslint/no-unused-vars': [

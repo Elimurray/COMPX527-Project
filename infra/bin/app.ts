@@ -5,6 +5,7 @@ import { StorageStack } from '../lib/storage-stack';
 import { AuthStack } from '../lib/auth-stack';
 import { ApiStack } from '../lib/api-stack';
 import { PipelineStack } from '../lib/pipeline-stack';
+import { WebStack } from '../lib/web-stack';
 
 const app = new App();
 const config = resolveConfig(app);
@@ -49,9 +50,17 @@ const api = new ApiStack(app, `Derf-${config.stage}-Api`, {
 
 // Passing constructs above already implies most of these, but stating them
 // keeps deploy order correct as the shells get filled in.
+const web = new WebStack(app, `Derf-${config.stage}-Web`, {
+  ...stackProps,
+  description: 'CloudFront distribution and the frontend bucket it serves',
+});
+
 // Storage -> Pipeline -> Api. No cycle: the pipeline never calls the API.
 pipeline.addStackDependency(storage);
 api.addStackDependency(auth);
 api.addStackDependency(pipeline);
+// Storage must update first: it releases the frontend bucket name that WebStack
+// then creates, so ordering prevents a name collision on this one deploy.
+web.addStackDependency(storage);
 
 app.synth();

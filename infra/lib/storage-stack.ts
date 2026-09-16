@@ -17,8 +17,6 @@ export class StorageStack extends Stack {
   public readonly datasetsBucket: s3.Bucket;
   /** Photos attached to community reports, uploaded via pre-signed URLs. */
   public readonly reportImagesBucket: s3.Bucket;
-  /** Built frontend assets. CloudFront reads this via OAC in M6 — never public. */
-  public readonly frontendBucket: s3.Bucket;
   /** Live community reports. */
   public readonly reportsTable: dynamodb.Table;
 
@@ -96,12 +94,10 @@ export class StorageStack extends Stack {
       ],
     });
 
-    this.frontendBucket = new s3.Bucket(this, 'FrontendBucket', {
-      ...commonBucketProps,
-      bucketName: config.bucketName('web'),
-      // No websiteIndexDocument: S3 static website hosting requires a public
-      // bucket. CloudFront + Origin Access Control (M6) serves this privately.
-    });
+    // The frontend bucket lives in WebStack, not here. Origin Access Control
+    // attaches a bucket policy referencing the CloudFront distribution, so a
+    // bucket in this stack plus a distribution in another creates a dependency
+    // cycle between the two stacks. Bucket and distribution must share a stack.
 
     /**
      * Reports table.
@@ -142,7 +138,6 @@ export class StorageStack extends Stack {
     new CfnOutput(this, 'ReportImagesBucketName', {
       value: this.reportImagesBucket.bucketName,
     });
-    new CfnOutput(this, 'FrontendBucketName', { value: this.frontendBucket.bucketName });
     new CfnOutput(this, 'ReportsTableName', { value: this.reportsTable.tableName });
   }
 }
