@@ -10,6 +10,7 @@ import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -140,7 +141,17 @@ export class ApiStack extends Stack {
     // does — and a Scan against the reports table is precisely the expensive
     // mistake the geohash key schema exists to prevent. Granting the single
     // action the code uses means the policy cannot drift from the behaviour.
-    props.reportsTable.grant(listReportsFn, 'dynamodb:Query');
+    // Query on the table *and* its indexes. A table grant alone does not cover
+    // index ARNs, so a GSI query would fail with AccessDenied at runtime.
+    listReportsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:Query'],
+        resources: [
+          props.reportsTable.tableArn,
+          `${props.reportsTable.tableArn}/index/*`,
+        ],
+      }),
+    );
 
     // The submission handler never touches the table at all; it can only enqueue.
     props.reportsQueue.grantSendMessages(createReportFn);

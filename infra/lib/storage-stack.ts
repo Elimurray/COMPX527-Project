@@ -4,6 +4,9 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import type { DerfStackProps } from './config';
 
+/** Name of the reports table's wide-area secondary index. */
+export const REPORTS_COARSE_INDEX = 'coarse-geo-index';
+
 /**
  * Durable state: the S3 buckets and the DynamoDB reports table.
  *
@@ -134,6 +137,22 @@ export class StorageStack extends Stack {
         pointInTimeRecoveryEnabled: config.isProd,
       },
       removalPolicy,
+    });
+
+    /**
+     * Wide-area index.
+     *
+     * Partitioned on the coarse geohash prefix (~156km cells) so a viewport too
+     * wide to cover at full precision can still be served by a bounded Query
+     * rather than a Scan. Costs one extra write unit per report and a second copy
+     * of each item's attributes — negligible at this project's volume, and the
+     * alternative is a zoomed-out map that silently shows nothing.
+     */
+    this.reportsTable.addGlobalSecondaryIndex({
+      indexName: REPORTS_COARSE_INDEX,
+      partitionKey: { name: 'geohash3', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'reportedAtId', type: dynamodb.AttributeType.STRING },
+      projectionType: dynamodb.ProjectionType.ALL,
     });
 
     /**

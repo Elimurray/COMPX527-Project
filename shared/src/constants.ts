@@ -29,15 +29,16 @@ export const REPORT_TTL_DAYS = 7;
 export const CAPACITY_ALERT_THRESHOLD = 0.9;
 
 /**
- * Geohash precision for the NOAA station layer — deliberately coarser than
- * GEOHASH_PRECISION.
+ * Coarse geohash precision (~156km cells) for wide-area queries.
  *
- * Resolution should match the density and the query scale of the layer, not be
- * uniform across the system. Community reports are dense and read at
- * neighbourhood zoom, so ~5km cells suit them. Weather stations are sparse —
- * fifteen across all of New Zealand — and are read at country zoom, where a 5km
- * grid would need thousands of cells and exceed the query ceiling, returning
- * nothing. At ~156km cells, a nationwide viewport resolves to about 30 cells and
- * a city viewport to one.
+ * Resolution should match the density and query scale of a layer, not be uniform
+ * across the system. GEOHASH_PRECISION (~5km) suits dense data read at
+ * neighbourhood zoom, but a nationwide viewport needs thousands of such cells and
+ * exceeds the query ceiling. At this precision a nationwide viewport resolves to
+ * about 30 cells and a city viewport to one.
+ *
+ * Used two ways: as the native resolution of the sparse NOAA station layer, and
+ * as the fallback resolution for reports when a viewport is too wide to cover at
+ * full precision.
  */
-export const STATION_GEOHASH_PRECISION = 3;
+export const COARSE_GEOHASH_PRECISION = 3;

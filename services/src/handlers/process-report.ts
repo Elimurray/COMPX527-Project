@@ -4,6 +4,7 @@ import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import type { SQSBatchResponse, SQSHandler, SQSRecord } from 'aws-lambda';
 import {
   CAPACITY_ALERT_THRESHOLD,
+  COARSE_GEOHASH_PRECISION,
   REPORT_TTL_DAYS,
   geohashForPoint,
   reportSortKey,
@@ -52,6 +53,9 @@ async function processOne(record: SQSRecord): Promise<void> {
     reportedBy: queued.reportedBy,
     reportedAt: queued.reportedAt,
     geohash,
+    // A prefix of `geohash`, not a second encode: geohash is a prefix code, so
+    // the coarse cell is literally the first few characters of the fine one.
+    geohash3: geohash.slice(0, COARSE_GEOHASH_PRECISION),
     reportedAtId,
     // TTL is in epoch *seconds*. Milliseconds here would set an expiry roughly
     // 50,000 years out, and nothing would ever be cleaned up.

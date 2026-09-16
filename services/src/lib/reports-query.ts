@@ -1,5 +1,7 @@
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import {
+  COARSE_GEOHASH_PRECISION,
+  GEOHASH_PRECISION,
   cellsForBoundingBox,
   type BoundingBox,
   type Report,
@@ -21,6 +23,9 @@ const TABLE = requireEnv('REPORTS_TABLE');
 /** Most recent rows to read per geohash cell. */
 const PER_CELL_LIMIT = 50;
 
+/** Secondary index partitioned on the coarse geohash prefix. */
+const COARSE_INDEX = 'coarse-geo-index';
+
 /** Strips the storage-only key attributes before a report leaves the API. */
 function toReport(item: ReportItem): Report {
   const { reportedAtId: _sk, expiresAt: _ttl, ...report } = item;
@@ -33,6 +38,8 @@ export interface QueryResult {
   truncated: boolean;
   /** How many geohash cells were queried — useful in logs and in the demo. */
   cellsQueried: number;
+  /** Which resolution served the request, for logging and diagnostics. */
+  resolution: 'fine' | 'coarse';
 }
 
 /**
@@ -43,14 +50,28 @@ export interface QueryResult {
  * latency track the size of the viewport rather than the size of the table.
  */
 export async function queryReports(bbox: BoundingBox): Promise<QueryResult> {
-  const { cells, truncated } = cellsForBoundingBox(bbox);
+  /**
+   * Resolution is chosen from the viewport, not fixed.
+   *
+   * Fine cells (~5km) are precise but a wide viewport needs thousands of them.
+   * When that exceeds the ceiling, the same question is asked of the coarse
+   * index (~156km cells) instead — fewer, larger partitions, still a bounded
+   * Query per cell and never a Scan. Results are filtered to the exact box
+   * afterwards either way, so the answer is identical; only the number of
+   * partitions read changes.
+   */
+  const fine = cellsForBoundingBox(bbox, GEOHASH_PRECISION);
+  const useCoarse = fine.truncated;
+  const coverage = useCoarse ? cellsForBoundingBox(bbox, COARSE_GEOHASH_PRECISION) : fine;
+  const { cells, truncated } = coverage;
 
   const responses = await Promise.all(
     cells.map((cell) =>
       ddb.send(
         new QueryCommand({
           TableName: TABLE,
-          KeyConditionExpression: 'geohash = :cell',
+          ...(useCoarse ? { IndexName: COARSE_INDEX } : {}),
+          KeyConditionExpression: useCoarse ? 'geohash3 = :cell' : 'geohash = :cell',
           ExpressionAttributeValues: { ':cell': cell },
           // Newest first: the sort key starts with an ISO timestamp.
           ScanIndexForward: false,
@@ -68,5 +89,10 @@ export async function queryReports(bbox: BoundingBox): Promise<QueryResult> {
     .filter((report) => withinBoundingBox(bbox, report.location))
     .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt));
 
-  return { reports, truncated, cellsQueried: cells.length };
+  return {
+    reports,
+    truncated,
+    cellsQueried: cells.length,
+    resolution: useCoarse ? 'coarse' : 'fine',
+  };
 }

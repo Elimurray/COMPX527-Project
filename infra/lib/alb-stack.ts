@@ -3,6 +3,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import type * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -91,8 +92,17 @@ export class AlbStack extends Stack {
       },
     });
 
-    // Same narrow grant as the API Gateway read path: Query and nothing else.
-    props.reportsTable.grant(albReportsFn, 'dynamodb:Query');
+    // Same narrow grant as the API Gateway read path: Query and nothing else,
+    // extended to index ARNs so the wide-area GSI is reachable.
+    albReportsFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['dynamodb:Query'],
+        resources: [
+          props.reportsTable.tableArn,
+          `${props.reportsTable.tableArn}/index/*`,
+        ],
+      }),
+    );
 
     this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'Alb', {
       loadBalancerName: config.resourceName('alb'),

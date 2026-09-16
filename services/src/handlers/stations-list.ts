@@ -1,7 +1,7 @@
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import {
-  STATION_GEOHASH_PRECISION,
+  COARSE_GEOHASH_PRECISION,
   cellsForBoundingBox,
   type ListStationsResponse,
   type StationItem,
@@ -34,7 +34,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     );
   }
 
-  const { cells, truncated } = cellsForBoundingBox(bbox, STATION_GEOHASH_PRECISION);
+  const { cells, truncated } = cellsForBoundingBox(bbox, COARSE_GEOHASH_PRECISION);
 
   const responses = await Promise.all(
     cells.map((cell) =>

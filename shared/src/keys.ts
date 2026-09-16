@@ -41,6 +41,14 @@ export function parseReportSortKey(sortKey: string): {
 export interface ReportItem extends Report {
   /** Sort key. Build with `reportSortKey()`. */
   reportedAtId: string;
+  /**
+   * Coarse geohash prefix, the partition key of the wide-area index.
+   *
+   * Geohash is a prefix code, so this is simply the first
+   * COARSE_GEOHASH_PRECISION characters of `geohash` — stored as its own
+   * attribute because DynamoDB cannot index a prefix of another attribute.
+   */
+  geohash3: string;
   /** TTL attribute — Unix epoch **seconds**, not milliseconds. */
   expiresAt: number;
 }

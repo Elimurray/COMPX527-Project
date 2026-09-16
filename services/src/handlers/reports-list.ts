@@ -26,12 +26,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     );
   }
 
-  const { reports, truncated, cellsQueried } = await queryReports(bbox);
+  const { reports, truncated, cellsQueried, resolution } = await queryReports(bbox);
 
   logger.info('list reports', {
     requestId,
     ingress: 'apigateway',
     cells: cellsQueried,
+    resolution,
     returned: reports.length,
     truncated,
   });

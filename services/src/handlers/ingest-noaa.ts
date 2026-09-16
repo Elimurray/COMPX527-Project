@@ -2,7 +2,7 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import type { Handler } from 'aws-lambda';
 import {
-  STATION_GEOHASH_PRECISION,
+  COARSE_GEOHASH_PRECISION,
   encodeGeohash,
   type StationItem,
   type StationObservation,
@@ -181,7 +181,7 @@ export const handler: Handler = async () => {
       name: station.name,
       location: { lat: station.lat, lon: station.lon },
       elevationM: station.elevationM,
-      geohash: encodeGeohash(station.lat, station.lon, STATION_GEOHASH_PRECISION),
+      geohash: encodeGeohash(station.lat, station.lon, COARSE_GEOHASH_PRECISION),
       ...(latest ? { latest } : {}),
       updatedAt: new Date().toISOString(),
     };

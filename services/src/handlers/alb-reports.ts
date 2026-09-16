@@ -89,12 +89,13 @@ export const handler: ALBHandler = async (event: ALBEvent): Promise<ALBResult> =
       );
     }
 
-    const { reports, truncated, cellsQueried } = await queryReports(bbox);
+    const { reports, truncated, cellsQueried, resolution } = await queryReports(bbox);
 
     logger.info('list reports', {
       requestId,
       ingress: 'alb',
       cells: cellsQueried,
+      resolution,
       returned: reports.length,
       truncated,
     });
