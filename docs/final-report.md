@@ -189,13 +189,46 @@ report trains recipients to ignore alerts, which is worse than sending none.
 
 ### 2.5 Public dataset integration
 
-`[TO COMPLETE]` — NOAA and FEMA ingestion. Planned design: a scheduled Lambda
-pulls NOAA Global Historical Climatology Network data (`noaa-ghcn-pds`, AWS
-Registry of Open Data) and FEMA disaster declarations from OpenFEMA into the
-datasets S3 bucket, partitioned by dataset and date, with a transform step
-producing map-ready records overlaid beneath live community reports. A lifecycle
-rule transitions raw pulls to Infrequent Access after 30 days to bound storage
-cost.
+Community reports are overlaid on authoritative environmental data drawn from the
+**NOAA Global Historical Climatology Network (Daily)**, published as
+`noaa-ghcn-pds` on the AWS Registry of Open Data. Recent rainfall near a shelter
+materially changes how a report about that shelter should be read.
+
+A Lambda scheduled weekly by Amazon EventBridge performs the ingestion. Four
+aspects of its design are worth recording.
+
+**Cross-account access is scoped to one bucket.** The NOAA bucket policy permits
+anonymous reads, but the caller's own IAM must still allow the operation. The
+grant names `arn:aws:s3:::noaa-ghcn-pds/*` and nothing else, so the ingestion
+function cannot read any other bucket inside or outside the account.
+
+**Raw data is archived before transformation.** Each run writes the unmodified
+source file to `raw/noaa/ghcn/stations/<date>.txt` in the datasets bucket. If the
+parser is later found to be wrong, every run remains reprocessable from its
+original input. A lifecycle rule transitions that prefix to Infrequent Access
+after thirty days to bound storage cost.
+
+**Transfer is minimised with range requests.** GHCN publishes one CSV per station
+containing decades of daily observations, around 2 MB each. Only the most recent
+rows are needed, and they sit at the end of the file, so the job issues an HTTP
+range request for the final 64 KB — roughly a thirty-fold reduction in transferred
+bytes per station. The ingestion is filtered to the New Zealand country prefix:
+fifteen of approximately 132,500 stations worldwide, since ingesting the full set
+would cost more in write capacity and storage than the project's budget permits.
+
+**Suspect data is discarded.** GHCN annotates observations with quality-control
+flags. Any row carrying one is dropped rather than displayed, on the grounds that
+a value the publisher itself marks as doubtful should not appear beside emergency
+information.
+
+Stations are stored partitioned by the **same geohash scheme** as community
+reports and served by a public `GET /stations?bbox=` endpoint, so the contextual
+layer and the live layer answer the same spatial question through the same
+mechanism.
+
+An ingestion failure raises a CloudWatch alarm to the operational topic. This
+matters because the failure mode is silent: without an alarm the map continues
+serving the previous week's data with nothing to indicate it is stale.
 
 ### 2.6 Content delivery
 
@@ -548,7 +581,7 @@ Commands run against the deployed system, with the properties they confirm.
 | Requirement | Implementation |
 |---|---|
 | User-collected data | Community reports via authenticated Cognito accounts |
-| Public dataset | `[TO COMPLETE]` NOAA GHCN + FEMA |
+| Public dataset | NOAA GHCN-Daily from `noaa-ghcn-pds` (Registry of Open Data), §2.5 |
 | Data storage | S3 (3 buckets) and DynamoDB |
 | EC2 or Lambda | Five Lambda functions |
 | Elastic Load Balancing | ALB with a Lambda target group serving the public read path (§2.8) |

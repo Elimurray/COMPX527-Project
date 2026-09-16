@@ -4,6 +4,7 @@ import type {
   CreateReportInput,
   CreateReportResponse,
   ListReportsResponse,
+  ListStationsResponse,
 } from '@derf/shared';
 import { config } from './config';
 import { accessToken } from './auth';
@@ -84,4 +85,21 @@ export async function createReport(
 
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as CreateReportResponse;
+}
+
+/**
+ * Public: NOAA weather stations providing environmental context.
+ *
+ * Queried on a coarser geohash resolution than reports, so this layer stays
+ * populated at country zoom where the report layer necessarily truncates.
+ */
+export async function listStations(bbox: BoundingBox): Promise<ListStationsResponse> {
+  const query = `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`;
+  const response = await fetch(
+    `${config.apiBaseUrl}/stations?bbox=${encodeURIComponent(query)}`,
+  );
+
+  if (!response.ok) throw await parseError(response);
+
+  return (await response.json()) as ListStationsResponse;
 }

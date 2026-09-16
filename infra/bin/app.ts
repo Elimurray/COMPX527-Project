@@ -7,6 +7,7 @@ import { ApiStack } from '../lib/api-stack';
 import { PipelineStack } from '../lib/pipeline-stack';
 import { WebStack } from '../lib/web-stack';
 import { AlbStack } from '../lib/alb-stack';
+import { IngestionStack } from '../lib/ingestion-stack';
 
 const app = new App();
 const config = resolveConfig(app);
@@ -45,8 +46,17 @@ const api = new ApiStack(app, `Derf-${config.stage}-Api`, {
   userPool: auth.userPool,
   userPoolClient: auth.userPoolClient,
   reportsTable: storage.reportsTable,
+  stationsTable: storage.stationsTable,
   reportImagesBucket: storage.reportImagesBucket,
   reportsQueue: pipeline.reportsQueue,
+});
+
+const ingestion = new IngestionStack(app, `Derf-${config.stage}-Ingestion`, {
+  ...stackProps,
+  description: 'Scheduled NOAA GHCN ingestion from the AWS Registry of Open Data',
+  datasetsBucket: storage.datasetsBucket,
+  stationsTable: storage.stationsTable,
+  opsTopic: pipeline.opsTopic,
 });
 
 // Passing constructs above already implies most of these, but stating them
@@ -75,5 +85,7 @@ api.addStackDependency(pipeline);
 // then creates, so ordering prevents a name collision on this one deploy.
 web.addStackDependency(storage);
 alb.addStackDependency(storage);
+ingestion.addStackDependency(storage);
+ingestion.addStackDependency(pipeline);
 
 app.synth();

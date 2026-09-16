@@ -23,6 +23,8 @@ export interface ApiStackProps extends DerfStackProps {
   readonly userPool: cognito.IUserPool;
   readonly userPoolClient: cognito.IUserPoolClient;
   readonly reportsTable: dynamodb.ITable;
+  /** NOAA station reference data, served as a contextual map layer. */
+  readonly stationsTable: dynamodb.ITable;
   readonly reportImagesBucket: s3.IBucket;
   /** Submissions are handed off here rather than written synchronously. */
   readonly reportsQueue: sqs.IQueue;
@@ -128,6 +130,10 @@ export class ApiStack extends Stack {
       IMAGES_BUCKET: props.reportImagesBucket.bucketName,
     });
 
+    const listStationsFn = createHandler('ListStations', 'stations-list.ts', {
+      STATIONS_TABLE: props.stationsTable.tableName,
+    });
+
     // Grants are made only where the code actually reads or writes.
     //
     // `grantReadData` would also permit dynamodb:Scan, which this handler never
@@ -138,6 +144,7 @@ export class ApiStack extends Stack {
 
     // The submission handler never touches the table at all; it can only enqueue.
     props.reportsQueue.grantSendMessages(createReportFn);
+    props.stationsTable.grant(listStationsFn, 'dynamodb:Query');
 
     this.httpApi.addRoutes({
       path: '/health',
@@ -167,6 +174,14 @@ export class ApiStack extends Stack {
       methods: [HttpMethod.POST],
       integration: new HttpLambdaIntegration('CreateReportIntegration', createReportFn),
       // Authenticated via the API default — submissions are attributable.
+    });
+
+    this.httpApi.addRoutes({
+      path: '/stations',
+      methods: [HttpMethod.GET],
+      integration: new HttpLambdaIntegration('ListStationsIntegration', listStationsFn),
+      // Public: contextual environmental data, same as reading reports.
+      authorizer: publicRoute,
     });
 
     new CfnOutput(this, 'ApiUrl', {

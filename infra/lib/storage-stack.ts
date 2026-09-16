@@ -19,6 +19,8 @@ export class StorageStack extends Stack {
   public readonly reportImagesBucket: s3.Bucket;
   /** Live community reports. */
   public readonly reportsTable: dynamodb.Table;
+  /** NOAA GHCN weather stations — contextual layer beneath live reports. */
+  public readonly stationsTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: DerfStackProps) {
     super(scope, id, props);
@@ -134,7 +136,28 @@ export class StorageStack extends Stack {
       removalPolicy,
     });
 
+    /**
+     * NOAA station reference data.
+     *
+     * Partitioned by the same geohash scheme as reports so both layers answer the
+     * same spatial question identically. No TTL: unlike a report, a weather
+     * station does not go stale — the ingestion job overwrites its observations
+     * in place.
+     */
+    this.stationsTable = new dynamodb.Table(this, 'StationsTable', {
+      tableName: config.resourceName('stations'),
+      partitionKey: { name: 'geohash', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'stationId', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: config.isProd,
+      },
+      removalPolicy,
+    });
+
     new CfnOutput(this, 'DatasetsBucketName', { value: this.datasetsBucket.bucketName });
+    new CfnOutput(this, 'StationsTableName', { value: this.stationsTable.tableName });
     new CfnOutput(this, 'ReportImagesBucketName', {
       value: this.reportImagesBucket.bucketName,
     });

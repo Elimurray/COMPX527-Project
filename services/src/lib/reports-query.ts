@@ -5,6 +5,7 @@ import {
   type Report,
   type ReportItem,
 } from '@derf/shared';
+import { withinBoundingBox } from './bbox';
 import { ddb, requireEnv } from './clients';
 
 /**
@@ -20,39 +21,10 @@ const TABLE = requireEnv('REPORTS_TABLE');
 /** Most recent rows to read per geohash cell. */
 const PER_CELL_LIMIT = 50;
 
-/**
- * Parses `minLon,minLat,maxLon,maxLat`.
- *
- * Returns null on anything malformed rather than throwing, so callers can answer
- * 400 with a useful message.
- */
-export function parseBoundingBox(raw: string | undefined): BoundingBox | null {
-  if (!raw) return null;
-
-  const parts = raw.split(',').map((value) => Number(value.trim()));
-  if (parts.length !== 4 || parts.some((value) => !Number.isFinite(value))) {
-    return null;
-  }
-
-  const [minLon, minLat, maxLon, maxLat] = parts as [number, number, number, number];
-  if (minLon > maxLon || minLat > maxLat) return null;
-  if (Math.abs(minLat) > 90 || Math.abs(maxLat) > 90) return null;
-  if (Math.abs(minLon) > 180 || Math.abs(maxLon) > 180) return null;
-
-  return { minLon, minLat, maxLon, maxLat };
-}
-
 /** Strips the storage-only key attributes before a report leaves the API. */
 function toReport(item: ReportItem): Report {
   const { reportedAtId: _sk, expiresAt: _ttl, ...report } = item;
   return report;
-}
-
-function within(bbox: BoundingBox, report: Report): boolean {
-  const { lat, lon } = report.location;
-  return (
-    lat >= bbox.minLat && lat <= bbox.maxLat && lon >= bbox.minLon && lon <= bbox.maxLon
-  );
 }
 
 export interface QueryResult {
@@ -93,7 +65,7 @@ export async function queryReports(bbox: BoundingBox): Promise<QueryResult> {
   const reports = responses
     .flatMap((response) => (response.Items ?? []) as ReportItem[])
     .map(toReport)
-    .filter((report) => within(bbox, report))
+    .filter((report) => withinBoundingBox(bbox, report.location))
     .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt));
 
   return { reports, truncated, cellsQueried: cells.length };

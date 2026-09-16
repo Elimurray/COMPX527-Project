@@ -1,7 +1,8 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import type { ListReportsResponse } from '@derf/shared';
 import { logger } from '../lib/logger';
-import { parseBoundingBox, queryReports } from '../lib/reports-query';
+import { parseBoundingBox } from '../lib/bbox';
+import { queryReports } from '../lib/reports-query';
 import { fail, ok } from '../lib/response';
 
 /**

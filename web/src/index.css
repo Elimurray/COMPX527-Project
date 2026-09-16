@@ -289,6 +289,22 @@ button.link {
 .popup-unknown {
   background: #5d6d7e;
 }
+.popup-station {
+  background: #34618a;
+}
+
+/* Context layer: deliberately small and quiet, so it never competes with a
+   live report marker for attention. */
+.station-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #34618a;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(52, 97, 138, 0.5);
+  cursor: pointer;
+  opacity: 0.85;
+}
 .popup-row,
 .popup-note {
   margin-bottom: 0.25rem;

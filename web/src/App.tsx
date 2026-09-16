@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BoundingBox, Report } from '@derf/shared';
-import { listReports } from './lib/api';
+import type { BoundingBox, Report, WeatherStation } from '@derf/shared';
+import { listReports, listStations } from './lib/api';
 import { currentUser, signOut, type AuthUser } from './lib/auth';
 import { MapView } from './components/MapView';
 import { AuthPanel } from './components/AuthPanel';
@@ -15,6 +15,7 @@ export function App() {
   const [reports, setReports] = useState<Report[]>([]);
   /** True when the viewport is too large for the server to cover completely. */
   const [truncated, setTruncated] = useState(false);
+  const [stations, setStations] = useState<WeatherStation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [pickedLocation, setPicked] = useState<{ lat: number; lon: number } | null>(null);
@@ -31,10 +32,24 @@ export function App() {
   const refresh = useCallback(async () => {
     if (!bounds.current) return;
     try {
-      const result = await listReports(bounds.current);
-      setReports(result.reports);
-      setTruncated(result.truncated === true);
-      setError(null);
+      // Both layers are fetched together, but a failure in the contextual layer
+      // must never hide live reports — hence allSettled rather than all.
+      const [reportResult, stationResult] = await Promise.allSettled([
+        listReports(bounds.current),
+        listStations(bounds.current),
+      ]);
+
+      if (reportResult.status === 'fulfilled') {
+        setReports(reportResult.value.reports);
+        setTruncated(reportResult.value.truncated === true);
+        setError(null);
+      } else {
+        throw reportResult.reason;
+      }
+
+      if (stationResult.status === 'fulfilled') {
+        setStations(stationResult.value.stations);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load reports');
     }
@@ -101,6 +116,7 @@ export function App() {
       <main className="main">
         <MapView
           reports={reports}
+          stations={stations}
           onBoundsChange={handleBounds}
           onPickLocation={handlePick}
           picking={picking}
@@ -129,6 +145,13 @@ export function App() {
                 {reports.length === 0
                   ? 'No reports in this area yet. Pan or zoom to search elsewhere.'
                   : 'Select a marker for detail.'}
+              </p>
+            )}
+
+            {stations.length > 0 && (
+              <p className="hint">
+                {stations.length} NOAA weather station
+                {stations.length === 1 ? '' : 's'} shown for context
               </p>
             )}
 

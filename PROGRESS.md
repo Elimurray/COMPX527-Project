@@ -35,7 +35,7 @@ this file only tracks *what is done and what is next*.
 | M1 | AWS account guardrails & IAM | 1 | Eli | ✅ Done (deviations) |
 | M2 | CDK app + core infra | 2 | Eli | 🟡 Storage + Auth live |
 | M3 | Auth → API → Lambda walking skeleton | 2–3 | Eli | ✅ Deployed + verified |
-| M4 | Data ingestion pipeline (NOAA/FEMA) | 3 | Sunita | ⬜ Not started |
+| M4 | Data ingestion (NOAA GHCN) | 3 | Eli | 🟡 Written, not deployed |
 | M5 | Reporting & alerting pipeline (SQS/SNS) | 4–5 | Eli | ✅ Deployed + verified |
 | M6 | Frontend map on CloudFront | 4–5 | Eli | 🟡 Written, not deployed |
 | M7 | Security hardening & load testing | 6–7 | Alexander | ⬜ Not started |
@@ -215,19 +215,37 @@ Prove the path end to end with trivial logic *before* building real features on 
 
 ---
 
-## M4 — Data ingestion (NOAA / FEMA)
-**Owner:** Sunita · **Target:** Week 3 · **Status:** ⬜
+## M4 — Data ingestion (NOAA GHCN)
+**Owner:** Eli · **Status:** 🟡 Written and synthesising, **not yet deployed**
 
-- [ ] Exact dataset endpoints identified and recorded here (NOAA GHCN, NOAA storm events,
-      FEMA disaster declarations, FEMA National Risk Index)
-- [ ] Raw pulls landed in the datasets S3 bucket, partitioned by dataset and date
-- [ ] Transform step producing map-ready records (trimmed fields, normalised geo)
-- [ ] Ingestion Lambda on an EventBridge schedule — cadence agreed and documented
-      (these are historical/event datasets; daily or weekly batch is almost certainly enough)
-- [ ] Failure alarm on the ingestion Lambda so a silent breakage is noticed
-- [ ] Cost check: confirm the S3 storage footprint is bounded, with lifecycle rules if not
+Satisfies the brief's public-dataset requirement.
 
-**Exit criteria:** authoritative disaster context is queryable without a manual step.
+- [x] Source: **`noaa-ghcn-pds`** on the AWS Registry of Open Data — NOAA Global
+      Historical Climatology Network (Daily)
+- [x] Read **cross-account** from the public bucket with IAM scoped to
+      `arn:aws:s3:::noaa-ghcn-pds/*` — the function can read no other bucket anywhere
+- [x] Raw pull archived to `raw/noaa/ghcn/stations/<date>.txt` in the datasets bucket
+      before transformation, so a parser bug can be reprocessed from source. The existing
+      lifecycle rule ages that prefix to Infrequent Access after 30 days.
+- [x] Fixed-width station file parsed (GHCN is not delimited); filtered to the NZ country
+      prefix — 15 stations of ~132,500 worldwide, because ingesting all of them would cost
+      more in writes and storage than the budget allows
+- [x] **S3 range requests** (`bytes=-65536`) fetch only the tail of each station's
+      observation file: ~64 KB instead of ~2 MB, a ~30x reduction in transfer, because the
+      recent rows are at the end
+- [x] Values converted from GHCN tenths to real units; rows carrying a NOAA
+      quality-control flag are discarded rather than shown beside emergency information
+- [x] Stations stored in `derf-dev-stations`, partitioned by the **same geohash scheme** as
+      reports, so the contextual layer answers the same spatial question the same way
+- [x] `GET /stations?bbox=` — public, `dynamodb:Query` only
+- [x] Weekly EventBridge schedule (Sun 15:00 UTC = early Monday NZ). GHCN updates daily at
+      best; polling per request would spend money to learn nothing.
+- [x] CloudWatch alarm on ingestion errors → ops topic. A silent failure is the dangerous
+      one: the map keeps showing last week's data with nothing to indicate staleness.
+- [ ] Deploy Storage → Api → Ingestion, then invoke the function once manually
+- [ ] Frontend layer rendering stations beneath report markers
+
+**Exit criteria:** authoritative environmental data is queryable without a manual step.
 
 ---
 

@@ -7,7 +7,7 @@ import {
   Popup,
   type MapMouseEvent,
 } from 'maplibre-gl';
-import type { BoundingBox, Report, ResourceStatus } from '@derf/shared';
+import type { BoundingBox, Report, ResourceStatus, WeatherStation } from '@derf/shared';
 import { DEFAULT_VIEW } from '../lib/config';
 
 /**
@@ -47,6 +47,8 @@ const STATUS_COLOUR: Record<ResourceStatus, string> = {
 
 interface MapViewProps {
   reports: Report[];
+  /** NOAA stations drawn beneath reports as environmental context. */
+  stations: WeatherStation[];
   onBoundsChange: (bbox: BoundingBox) => void;
   /** Called when the user picks a spot to report on. */
   onPickLocation: (lat: number, lon: number) => void;
@@ -55,6 +57,7 @@ interface MapViewProps {
 
 export function MapView({
   reports,
+  stations,
   onBoundsChange,
   onPickLocation,
   picking,
@@ -62,6 +65,7 @@ export function MapView({
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
   const markers = useRef<Marker[]>([]);
+  const stationMarkers = useRef<Marker[]>([]);
 
   // Keep the latest callbacks in refs so the map is created once and never
   // torn down by a re-render.
@@ -119,6 +123,29 @@ export function MapView({
     if (canvas) canvas.style.cursor = picking ? 'crosshair' : '';
   }, [picking]);
 
+  /**
+   * Stations render as small dots rather than pins, and are added before the
+   * report markers so they sit underneath. This is background context: it should
+   * never compete for attention with a live report about a shelter.
+   */
+  useEffect(() => {
+    const instance = map.current;
+    if (!instance) return;
+
+    stationMarkers.current.forEach((marker) => marker.remove());
+    stationMarkers.current = stations.map((station) => {
+      const dot = document.createElement('div');
+      dot.className = 'station-dot';
+      dot.title = station.name;
+
+      const popup = new Popup({ offset: 12 }).setHTML(renderStationPopup(station));
+      return new Marker({ element: dot })
+        .setLngLat([station.location.lon, station.location.lat])
+        .setPopup(popup)
+        .addTo(instance);
+    });
+  }, [stations]);
+
   useEffect(() => {
     const instance = map.current;
     if (!instance) return;
@@ -163,6 +190,35 @@ function renderPopup(report: Report): string {
       ${capacity}
       ${note}
       <div class="popup-meta">Reported ${age}</div>
+    </div>`;
+}
+
+function renderStationPopup(station: WeatherStation): string {
+  const latest = station.latest;
+
+  const readings: string[] = [];
+  if (latest?.maxTempC !== undefined) readings.push(`High ${latest.maxTempC}°C`);
+  if (latest?.minTempC !== undefined) readings.push(`Low ${latest.minTempC}°C`);
+  if (latest?.precipitationMm !== undefined) {
+    readings.push(`Rain ${latest.precipitationMm}mm`);
+  }
+
+  const body = readings.length
+    ? `<div class="popup-row">${readings.join(' · ')}</div>`
+    : '<div class="popup-row">No recent observations</div>';
+
+  // NOAA publishes with a lag, so the observation date is shown rather than
+  // implied to be current — this layer is context, not live data.
+  const observed = latest?.date ? `Observed ${escapeHtml(latest.date)}` : 'Date unknown';
+
+  return `
+    <div class="popup">
+      <div class="popup-head">
+        <strong>${escapeHtml(station.name)}</strong>
+        <span class="popup-status popup-station">NOAA</span>
+      </div>
+      ${body}
+      <div class="popup-meta">${observed} · ${escapeHtml(station.stationId)}</div>
     </div>`;
 }
 

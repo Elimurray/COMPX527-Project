@@ -1,7 +1,8 @@
 import type { ALBEvent, ALBHandler, ALBResult } from 'aws-lambda';
 import type { ApiError, HealthResponse, ListReportsResponse } from '@derf/shared';
 import { logger } from '../lib/logger';
-import { parseBoundingBox, queryReports } from '../lib/reports-query';
+import { parseBoundingBox } from '../lib/bbox';
+import { queryReports } from '../lib/reports-query';
 
 /**
  * Application Load Balancer ingress for the public read path.
